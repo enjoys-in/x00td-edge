@@ -1,0 +1,177 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * enjoys-os — FRONT (OV8856) + REAR main (OV13855) cameras for the Asus
+ * ZenFone Max Pro M1 (asus-x00td, sdm636/sdm660). Appended to the board DTS
+ * (sdm636-asus-x00td.dts) via a trailing #include at kernel-build time.
+ *
+ * Every value is carved from the REAL x00td stock DTB (qcom,camera@N) and
+ * resolved to mainline pm660/pm660l regulators + mmcc-sdm660 clocks:
+ *
+ *   FRONT  camera@2: CSIPHY2 / CSID2 / CCI master 1 (cci_i2c1)
+ *                    MCLK gpio33 (mclk1) / RESET gpio47 / 4-lane / ov8856
+ *   REAR   camera@0: CSIPHY0 / CSID0 / CCI master 0 (cci_i2c0)
+ *                    MCLK gpio32 (mclk0) / RESET gpio46 / 4-lane / ov13855
+ *                    (the mainline "ov13858" driver checks CHIP_ID 0xd855 =
+ *                     OV13855, so it binds the fitted rear sensor directly)
+ *
+ *   Shared rails:
+ *     DOVDD 1.8V  = pm660_l11                 -> vreg_l11a_1p8
+ *     AVDD  2.8V  = cam_vadd (TLMM gpio51)    -> cam_vdd_ana (vin = vreg_bob)
+ *   Per-camera DVDD:
+ *     FRONT 1.35V = pm660_s5                  -> vreg_s5a_1p35
+ *     REAR  1.35V = pm660l_gpios4 switch      -> cam_rear_dvdd (vin = S5A)
+ *
+ * On-device-only tuning (does NOT affect DTB compile): I2C addresses (0x10),
+ * MCLK 19.2 vs 24 MHz, link-frequencies, and the pm660l gpio4 pin index.
+ */
+
+#include <dt-bindings/clock/qcom,mmcc-sdm660.h>
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	/* Shared 2.8 V camera analog — external LDO, TLMM gpio51 enable. */
+	cam_vdd_ana: regulator-cam-vana {
+		compatible = "regulator-fixed";
+		regulator-name = "cam_vdd_ana_2v8";
+		regulator-min-microvolt = <2800000>;
+		regulator-max-microvolt = <2800000>;
+		gpio = <&tlmm 51 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		vin-supply = <&vreg_bob>;
+	};
+
+	/* Rear 1.35 V digital — pm660l gpio4 switch, sourced from S5A. */
+	cam_rear_dvdd: regulator-cam-rear-dvdd {
+		compatible = "regulator-fixed";
+		regulator-name = "cam_rear_dvdd_1v35";
+		regulator-min-microvolt = <1350000>;
+		regulator-max-microvolt = <1350000>;
+		gpio = <&pm660l_gpios 4 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		vin-supply = <&vreg_s5a_1p35>;
+	};
+};
+
+&cci {
+	status = "okay";
+};
+
+/* ---- FRONT: OV8856 on CCI master 1 ---- */
+&cci_i2c1 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	camera_front: camera@10 {
+		compatible = "ovti,ov8856";
+		reg = <0x10>;
+
+		clocks = <&mmcc CAMSS_MCLK1_CLK>;
+		clock-names = "xvclk";
+		assigned-clocks = <&mmcc CAMSS_MCLK1_CLK>;
+		assigned-clock-rates = <19200000>;
+		clock-frequency = <19200000>;
+
+		dovdd-supply = <&vreg_l11a_1p8>;
+		avdd-supply = <&cam_vdd_ana>;
+		dvdd-supply = <&vreg_s5a_1p35>;
+
+		reset-gpios = <&tlmm 47 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&cam_front_mclk_default>;
+
+		rotation = <270>;
+		orientation = <0>; /* front-facing */
+
+		port {
+			ov8856_ep: endpoint {
+				remote-endpoint = <&csiphy2_ep>;
+				data-lanes = <1 2 3 4>;
+				link-frequencies = /bits/ 64 <360000000>;
+			};
+		};
+	};
+};
+
+/* ---- REAR main: OV13855 (mainline ov13858 driver) on CCI master 0 ---- */
+&cci_i2c0 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	camera_rear: camera@10 {
+		compatible = "ovti,ov13858";
+		reg = <0x10>;
+
+		clocks = <&mmcc CAMSS_MCLK0_CLK>;
+		clock-names = "xvclk";
+		assigned-clocks = <&mmcc CAMSS_MCLK0_CLK>;
+		assigned-clock-rates = <19200000>;
+		clock-frequency = <19200000>;
+
+		dovdd-supply = <&vreg_l11a_1p8>;
+		avdd-supply = <&cam_vdd_ana>;
+		dvdd-supply = <&cam_rear_dvdd>;
+
+		reset-gpios = <&tlmm 46 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&cam_rear_mclk_default>;
+
+		rotation = <270>;
+		orientation = <1>; /* back-facing */
+
+		port {
+			ov13858_ep: endpoint {
+				remote-endpoint = <&csiphy0_ep>;
+				data-lanes = <1 2 3 4>;
+				link-frequencies = /bits/ 64 <540000000>;
+			};
+		};
+	};
+};
+
+&camss {
+	vdda-supply = <&vreg_l1a_1p225>;
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/* CSIPHY0 — rear main. */
+		port@0 {
+			reg = <0>;
+			csiphy0_ep: endpoint {
+				bus-type = <4>; /* MEDIA_BUS_TYPE_CSI2_DPHY */
+				data-lanes = <1 2 3 4>;
+				remote-endpoint = <&ov13858_ep>;
+			};
+		};
+
+		/* CSIPHY2 — front. */
+		port@2 {
+			reg = <2>;
+			csiphy2_ep: endpoint {
+				bus-type = <4>; /* MEDIA_BUS_TYPE_CSI2_DPHY */
+				data-lanes = <1 2 3 4>;
+				remote-endpoint = <&ov8856_ep>;
+			};
+		};
+	};
+};
+
+&tlmm {
+	cam_front_mclk_default: cam-front-mclk-state {
+		pins = "gpio33";
+		function = "cam_mclk";
+		drive-strength = <8>;
+		bias-disable;
+	};
+
+	cam_rear_mclk_default: cam-rear-mclk-state {
+		pins = "gpio32";
+		function = "cam_mclk";
+		drive-strength = <8>;
+		bias-disable;
+	};
+};

@@ -1,7 +1,9 @@
-# enjoys-os: enable the front OV8856 camera on sdm660 CAMSS (raw capture).
+# enjoys-os: front (OV8856) + rear main (OV13855) cameras on sdm660 CAMSS.
 # Merge into the pmaports linux-postmarketos-qcom-sdm660 kernel config.
 CONFIG_MEDIA_SUPPORT=y
 CONFIG_MEDIA_CAMERA_SUPPORT=y
 CONFIG_V4L_PLATFORM_DRIVERS=y
 CONFIG_VIDEO_QCOM_CAMSS=m
 CONFIG_VIDEO_OV8856=m
+# Mainline ov13858 driver checks CHIP_ID 0xd855 = OV13855 (the fitted rear).
+CONFIG_VIDEO_OV13858=m
