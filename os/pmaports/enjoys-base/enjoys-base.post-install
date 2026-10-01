@@ -1,0 +1,25 @@
+#!/bin/sh
+# Enable only SSH + Docker on boot.
+rc-update add sshd   default 2>/dev/null || true
+rc-update add docker default 2>/dev/null || true
+
+# Let the default 'user' use docker without sudo (best effort; the user account
+# may be created after this runs, so re-run on first boot if it didn't take).
+addgroup user docker 2>/dev/null || true
+
+# Branding: console boot/login banner + motd.
+# \n and \l are agetty escapes (hostname, tty) and must stay literal.
+cat > /etc/issue <<'EOF'
+========================================
+            E N J O Y S - O S
+       X00TD - SSH + Docker node
+========================================
+\n (\l)
+
+EOF
+
+cat > /etc/motd <<'EOF'
+Welcome to enjoys-os - headless SSH + Docker node.
+EOF
+
+exit 0

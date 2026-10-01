@@ -1,0 +1,6 @@
+# Keep LF on all text files so shell scripts, APKBUILD and OpenRC init scripts
+# work on Linux/WSL regardless of the checkout platform (CRLF breaks abuild/sh).
+* text=auto eol=lf
+
+# Precompiled binary (normally gitignored) is binary if ever added.
+bin/edge-api binary

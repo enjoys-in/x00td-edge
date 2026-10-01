@@ -1,0 +1,32 @@
+#!/sbin/openrc-run
+
+name="edge-api"
+description="X00TD edge Go API (Redis cache + remote Postgres)"
+
+command="/usr/bin/edge-api"
+command_user="edge:edge"
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+
+# Keep the always-on service alive across crashes.
+supervisor="supervise-daemon"
+respawn_delay=5
+respawn_max=0
+
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.log"
+
+depend() {
+	need net
+	want redis
+	after firewall
+}
+
+start_pre() {
+	# Load secrets/config into the daemon environment.
+	if [ -f /etc/edge-api/edge-api.env ]; then
+		set -a
+		. /etc/edge-api/edge-api.env
+		set +a
+	fi
+}

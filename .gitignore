@@ -1,0 +1,12 @@
+# Build output
+/bin/
+*.exe
+
+# Local secrets / config
+.env
+/deploy/edge-api.env
+
+# Go
+/vendor/
+*.test
+*.out

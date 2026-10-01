@@ -1,0 +1,29 @@
+# Overlay that runs the ARM64 edge-api under CPU emulation (QEMU/binfmt),
+# alongside the Postgres + Redis from docker-compose.yml. This executes the
+# ACTUAL phone binary on aarch64 — proof the cross-compiled stack runs on ARM.
+#
+# Requires the binary first:  make build-arm64   (creates bin/edge-api)
+# Run:  docker compose -f docker-compose.yml -f docker-compose.arm64.yml up -d
+#
+# Not a full-kernel boot (that's the pmbootstrap/QEMU route) — this is CPU-level
+# emulation of the aarch64 userland, which is enough to validate the binaries.
+
+services:
+  api:
+    image: alpine:3.20
+    platform: linux/arm64
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      LISTEN_ADDR: ":8080"
+      DATABASE_URL: "postgres://app:app@postgres:5432/app?sslmode=disable"
+      REDIS_ADDR: "redis:6379"
+      CACHE_TTL_SECONDS: "30"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./bin/edge-api:/usr/local/bin/edge-api:ro
+    command: ["/usr/local/bin/edge-api"]

@@ -1,0 +1,21 @@
+# Maintainer: you <you@example.com>
+#
+# enjoys-os base: a minimal headless node. Only SSH + Docker.
+# This is a metapackage — it installs no files itself; it just pulls in
+# openssh + docker and, via post-install, enables them and sets branding.
+
+pkgname=enjoys-base
+pkgver=0.1.0
+pkgrel=0
+pkgdesc="enjoys-os base: headless SSH + Docker"
+url="https://local/enjoys-os"
+arch="noarch"
+license="MIT"
+depends="openssh docker docker-cli-compose"
+install="$pkgname.post-install"
+options="!check"
+
+package() {
+	# Metapackage: deps pull in openssh + docker; branding is set in post-install.
+	mkdir -p "$pkgdir"
+}
