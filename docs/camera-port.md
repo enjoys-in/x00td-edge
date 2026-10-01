@@ -88,3 +88,38 @@ sudo mount -o ro,loop vendor.img /mnt
 cat /mnt/etc/camera/camera_config.xml          # slot -> sensor binding
 ls  /mnt/lib64 | grep libmmcamera_             # sensor driver libs
 ```
+
+## 7. Mainline bring-up — front OV8856 (the first target)
+
+Verified against current mainline (the pmOS edge kernel is 7.2.x):
+
+- **CAMSS supports sdm660**: `qcom,sdm660-camss` is in the `camss` driver
+  (`CAMSS_660`: 3 CSIPHYs, 4 CSIDs, 2 VFEs).
+- **`sdm630.dtsi` already has the blocks**: `camss@ca00020` + `cci@ca0c000`
+  (with `cci_i2c0`/`cci_i2c1` and an empty `ports` node), both `status =
+  "disabled"`. Pinctrl `cci1_default` = GPIO38/39 (CCI master 1 = front).
+- **OV8856 has a mainline driver** (`ovti,ov8856`). So the front camera is
+  **device-tree only** — no driver to write.
+
+Scaffold in this repo:
+- `os/camera/sdm660-x00td-ov8856-front.dtsi` — enables `&camss`/`&cci`, adds the
+  OV8856 node on `cci_i2c1` + the CSIPHY2 endpoint (TODOs: exact MCLK clock +
+  pinctrl, PMIC regulator phandles, I2C addr, link-frequencies).
+- `os/camera/ov8856.kconfig` — enables `VIDEO_QCOM_CAMSS` + `VIDEO_OV8856`.
+
+Integrate + test (needs the phone):
+```sh
+# 1. add the .dtsi to the x00td board DTS (include it), apply the kconfig:
+pmbootstrap kconfig edit linux-postmarketos-qcom-sdm660   # merge ov8856.kconfig
+# 2. rebuild + flash:
+pmbootstrap build --force linux-postmarketos-qcom-sdm660
+# 3. on-device:
+dmesg | grep -iE 'camss|csiphy|ov8856'    # did the sensor probe + link?
+media-ctl -p                               # inspect the media graph
+v4l2-ctl --list-devices
+v4l2-ctl -d /dev/videoX --stream-mmap --stream-to=frame.raw --stream-count=1
+```
+Iterate on the TODOs (MCLK freq 19.2 vs 24 MHz, I2C addr, regulators) using the
+`dmesg` errors until a raw frame is captured. Rear (OV13855) and depth
+(HI556/GC5025) follow once the front path works.
+
