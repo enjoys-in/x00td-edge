@@ -1,25 +1,44 @@
 #!/bin/sh
-# Enable only SSH + Docker on boot.
+# Enable SSH + Docker + Caddy on boot.
 rc-update add sshd   default 2>/dev/null || true
 rc-update add docker default 2>/dev/null || true
+rc-update add caddy  default 2>/dev/null || true
 
 # Let the default 'user' use docker without sudo (best effort; the user account
 # may be created after this runs, so re-run on first boot if it didn't take).
 addgroup user docker 2>/dev/null || true
+
+# Make enjoys-os the default Plymouth theme (path owned by plymouth, so write
+# it here instead of shipping it to avoid an apk file conflict).
+mkdir -p /etc/plymouth
+cat > /etc/plymouth/plymouthd.conf <<'EOF'
+[Daemon]
+Theme=enjoys-os
+DeviceTimeout=8
+EOF
+
+# Default Caddy site (path owned by caddy; write instead of ship).
+mkdir -p /etc/caddy
+cat > /etc/caddy/Caddyfile <<'EOF'
+# enjoys-os default Caddy site. Replace with your sites / reverse proxies.
+:80 {
+	respond "enjoys-os: caddy is running" 200
+}
+EOF
 
 # Branding: console boot/login banner + motd.
 # \n and \l are agetty escapes (hostname, tty) and must stay literal.
 cat > /etc/issue <<'EOF'
 ========================================
             E N J O Y S - O S
-       X00TD - SSH + Docker node
+     X00TD - SSH + Docker + Caddy
 ========================================
 \n (\l)
 
 EOF
 
 cat > /etc/motd <<'EOF'
-Welcome to enjoys-os - headless SSH + Docker node.
+Welcome to enjoys-os - headless SSH + Docker + Caddy node.
 EOF
 
 exit 0

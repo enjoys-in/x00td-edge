@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=enjoys-os
+Description=enjoys-os boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/enjoys-os
+ScriptFile=/usr/share/plymouth/themes/enjoys-os/enjoys-os.script

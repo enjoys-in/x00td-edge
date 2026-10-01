@@ -1,21 +1,33 @@
 # Maintainer: you <you@example.com>
 #
-# enjoys-os base: a minimal headless node. Only SSH + Docker.
-# This is a metapackage — it installs no files itself; it just pulls in
-# openssh + docker and, via post-install, enables them and sets branding.
+# enjoys-os base: a minimal headless node — SSH + Docker + Caddy + boot splash.
+# Pulls in openssh, docker, caddy and the plymouth bootsplash; installs the
+# enjoys-os splash theme + Caddy config; enables services via post-install.
 
 pkgname=enjoys-base
 pkgver=0.1.0
 pkgrel=0
-pkgdesc="enjoys-os base: headless SSH + Docker"
+pkgdesc="enjoys-os base: headless SSH + Docker + Caddy, with boot splash"
 url="https://local/enjoys-os"
 arch="noarch"
 license="MIT"
-depends="openssh docker docker-cli-compose"
+depends="openssh docker docker-cli-compose caddy postmarketos-bootsplash"
 install="$pkgname.post-install"
+source="enjoys-os.plymouth
+	enjoys-os.script
+	logo.png"
 options="!check"
 
 package() {
-	# Metapackage: deps pull in openssh + docker; branding is set in post-install.
-	mkdir -p "$pkgdir"
+	# Plymouth boot splash theme with the enjoys-os logo. plymouthd.conf and the
+	# Caddyfile are written in post-install instead — those paths are owned by the
+	# plymouth/caddy packages and can't be shipped without an apk file conflict.
+	install -Dm644 "$srcdir/enjoys-os.plymouth" "$pkgdir/usr/share/plymouth/themes/enjoys-os/enjoys-os.plymouth"
+	install -Dm644 "$srcdir/enjoys-os.script"   "$pkgdir/usr/share/plymouth/themes/enjoys-os/enjoys-os.script"
+	install -Dm644 "$srcdir/logo.png"           "$pkgdir/usr/share/plymouth/themes/enjoys-os/logo.png"
 }
+sha512sums="
+dc02a6ebc48a43bef300bc75c0508fdcdc2caa31dfa87274c954aead4e26d16b7dc6272d7a5f1087fde12775dd8caee3f65bda6f93c75af1a43a0a417701680e  enjoys-os.plymouth
+6a2713158959a0c4eed0898d1022f0e29d00fef95e6a8492bde3bd884407270fc8905fdbc2d7e252cba3224c6f81727d393da1bdd53b4a9298213b86c240fb56  enjoys-os.script
+5c882e25fafef8114c30c509cb28c96b947bec40f67cc32a8bd473251295a296108436fa37e87138ff6a8683fe639dff68b3268956980b9448e3012a910e1314  logo.png
+"

@@ -2,5 +2,6 @@
 # work on Linux/WSL regardless of the checkout platform (CRLF breaks abuild/sh).
 * text=auto eol=lf
 
-# Precompiled binary (normally gitignored) is binary if ever added.
+# Images and the precompiled binary are binary.
+*.png binary
 bin/edge-api binary

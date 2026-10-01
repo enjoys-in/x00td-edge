@@ -21,7 +21,7 @@ command -v pmbootstrap >/dev/null 2>&1 || {
 }
 
 echo ">> [1/4] normalizing package files (CRLF -> LF)"
-for f in APKBUILD "$PKG.post-install"; do
+for f in APKBUILD "$PKG.post-install" enjoys-os.plymouth enjoys-os.script plymouthd.conf Caddyfile; do
 	[ -f "$PKGDIR/$f" ] && sed -i 's/\r$//' "$PKGDIR/$f"
 done
 
@@ -33,8 +33,10 @@ ln -sfn "$PKGDIR" "$APORTS/main/$PKG"
 
 echo ">> [3/4] building the $PKG apk"
 pmbootstrap checksum "$PKG"
-# --force: our local package content changes without pkgver bumps.
-pmbootstrap build --force "$PKG"
+# --force + --arch: rebuild the TARGET-arch apk. This is a noarch pkg cached
+# per-arch; without --arch the install step reuses a stale aarch64 apk. Both
+# of our targets (qemu-aarch64, asus-x00td) are aarch64.
+pmbootstrap build --force --arch aarch64 "$PKG"
 
 echo ">> [4/4] building the rootfs image for $TARGET (with $PKG baked in)"
 # --zap: wipe any previous rootfs so removed packages/services don't linger.
