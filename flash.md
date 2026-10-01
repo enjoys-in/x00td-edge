@@ -143,11 +143,8 @@ caddy version
 
 ## 8. Post-flash setup
 
-- **Wi-Fi** (if supported on this port):
-  ```bash
-  sudo nmtui                # or: nmcli device wifi connect "<SSID>" password "<pw>"
-  ```
-  If NetworkManager isn't present, use `iwctl` / `wpa_supplicant`.
+- **Wi-Fi / Bluetooth:** see section 9 — the drivers + firmware are already in
+  the port, so joining WiFi is usually just `sudo nmtui`.
 - **Let `user` run docker without sudo** (if it didn't take at build time):
   ```bash
   sudo addgroup user docker && sudo rc-service docker restart
@@ -155,7 +152,69 @@ caddy version
 - **Timezone:** `sudo setup-timezone`
 - **Update:** `sudo apk update && sudo apk upgrade`
 
-## 9. Troubleshooting
+## 9. Wireless (WiFi / Bluetooth) & firmware
+
+You do **not** need to build or write drivers — they are mainline and already
+enabled in this port's kernel, and WiFi firmware is shipped:
+
+| | Chip / driver | Status in this port |
+|---|---|---|
+| **WiFi** | Qualcomm **WCN3990** via **`ath10k_snoc`** (`CONFIG_ATH10K_SNOC=m`) | driver on; firmware `ath10k/WCN3990/*` shipped by `firmware-asus-x00td` |
+| **Bluetooth** | Qualcomm **`hci_qca`** (`CONFIG_BT_QCA=m`) | driver on; BT firmware blobs may need the stock ones (see extraction) |
+| **Camera** | mainline Qualcomm CAMSS | not supported |
+
+The device also pulls in **`msm-firmware-loader`**, which loads firmware straight
+from the phone's own stock firmware partition at runtime — so in many cases **no
+manual extraction is needed**.
+
+### Verify / bring up (over SSH)
+```bash
+dmesg | grep -iE 'ath10k|qca|bluetooth|firmware'   # driver + firmware load
+rfkill list                                        # unblock if soft-blocked
+ip link                                            # look for wlan0
+```
+Join WiFi (UI=none has no GUI; install NetworkManager if absent):
+```bash
+sudo apk add networkmanager networkmanager-tui
+sudo rc-update add networkmanager default && sudo rc-service networkmanager start
+sudo nmtui                                          # or: iwctl / wpa_supplicant
+```
+Bluetooth (install the userspace stack):
+```bash
+sudo apk add bluez
+sudo rc-update add bluetooth default && sudo rc-service bluetooth start
+bluetoothctl
+```
+If `ath10k` loads its firmware cleanly, `wlan0` appears and `nmtui` connects —
+that's **working WiFi, no driver work**.
+
+### If a firmware blob IS missing — extract from the stock ROM
+Qualcomm firmware (especially **Bluetooth** `qca/crbtfw*.tlv` + `qca/crnv*.bin`,
+or a board-specific WiFi `board-2.bin`/BDF) is non-free and sometimes absent.
+Pull it from the stock **vendor/firmware** partition — you extract **firmware
+blobs, never kernel drivers**:
+
+```bash
+# Option 1 - from a running stock Android (adb):
+adb pull /vendor/firmware ./vendor-fw          # path varies by ROM
+
+# Option 2 - from a stock ROM image:
+#   A/B OTA payload.bin -> vendor.img:
+payload-dumper-go payload.bin
+#   sparse image -> raw -> mount:
+simg2img vendor.img vendor.raw && sudo mount -o loop,ro vendor.raw /mnt
+#   newer EROFS images:  fsck.erofs --extract=./out vendor.img
+```
+Then copy the blobs to the path the driver asks for (check the `dmesg`
+"firmware: failed to load ..." line) and reload:
+```bash
+# e.g. Qualcomm BT firmware, copied to the phone via scp:
+sudo install -Dm644 crbtfw*.tlv crnv*.bin -t /lib/firmware/qca/
+sudo modprobe -r hci_qca && sudo modprobe hci_qca   # or reboot
+# WiFi board data goes under /lib/firmware/ath10k/WCN3990/hw1.0/
+```
+
+## 10. Troubleshooting
 
 | Symptom | Fix |
 |---|---|
@@ -163,9 +222,10 @@ caddy version
 | Unlock refused | Enable **OEM unlocking** first; try `fastboot oem unlock`; check device wiki for Asus tool |
 | Boot loops / black screen | Re-flash `vbmeta` (verity must be disabled); confirm `flash_kernel` + `flash_rootfs` both succeeded |
 | No `172.16.42.1` | USB networking profile is `developer` (default); try another cable/port; check `dmesg` on the host |
-| Wi-Fi missing | Expected on a `testing` port — track status on the device wiki |
+| `wlan0` missing / ath10k fw fail | `dmesg | grep ath10k`; supply the exact `board-2.bin`/BDF it names (§9 extraction) |
+| Bluetooth missing | install `bluez`; `hci_qca` may need `qca/crbtfw*.tlv`+`crnv*.bin` from stock vendor (§9) |
 
-## 10. Reference
+## 11. Reference
 
 - Generic install guide: <https://wiki.postmarketos.org/wiki/Installation_guide>
 - Device page: <https://wiki.postmarketos.org/wiki/ASUS_ZenFone_Max_Pro_M1_(asus-x00td)>
