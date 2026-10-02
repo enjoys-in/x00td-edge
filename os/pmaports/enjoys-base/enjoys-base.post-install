@@ -2,10 +2,8 @@
 # enjoys-os post-install: services, root-as-primary login, branding + MOTD.
 
 # --- enable services on boot ---
-rc-update add sshd   default 2>/dev/null || true
-rc-update add docker default 2>/dev/null || true
-rc-update add caddy  default 2>/dev/null || true
-rc-update add local  default 2>/dev/null || true
+rc-update add sshd  default 2>/dev/null || true
+rc-update add local default 2>/dev/null || true
 
 # --- root is the primary account (password set on first boot, see below) ---
 
@@ -47,15 +45,6 @@ cat > /etc/plymouth/plymouthd.conf <<'EOF'
 [Daemon]
 Theme=enjoys-os
 DeviceTimeout=8
-EOF
-
-# --- default Caddy site ---
-mkdir -p /etc/caddy
-cat > /etc/caddy/Caddyfile <<'EOF'
-# enjoys-os default Caddy site. Replace with your sites / reverse proxies.
-:80 {
-	respond "enjoys-os: caddy is running" 200
-}
 EOF
 
 # --- console pre-login banner (/etc/issue); \n \l are agetty escapes ---

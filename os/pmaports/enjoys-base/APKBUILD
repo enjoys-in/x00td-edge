@@ -1,17 +1,18 @@
 # Maintainer: you <you@example.com>
 #
-# enjoys-os base: a minimal headless node — SSH + Docker + Caddy + boot splash.
-# Pulls in openssh, docker, caddy and the plymouth bootsplash; installs the
-# enjoys-os splash theme + Caddy config; enables services via post-install.
+# enjoys-os base: a minimal headless SSH node + boot splash.
+# Pulls in openssh and the plymouth bootsplash; installs the enjoys-os splash
+# theme; sets up root login + branded MOTD and enables sshd via post-install.
+# (Docker + Caddy were removed in 0.2.0 to keep the image small — ~190 MB.)
 
 pkgname=enjoys-base
-pkgver=0.1.0
-pkgrel=1
-pkgdesc="enjoys-os base: headless SSH + Docker + Caddy, root login + branded MOTD"
+pkgver=0.2.0
+pkgrel=0
+pkgdesc="enjoys-os base: minimal headless SSH node, root login + branded MOTD"
 url="https://local/enjoys-os"
 arch="noarch"
 license="MIT"
-depends="openssh docker docker-cli-compose caddy postmarketos-bootsplash"
+depends="openssh postmarketos-bootsplash"
 install="$pkgname.post-install"
 source="enjoys-os.plymouth
 	enjoys-os.script
