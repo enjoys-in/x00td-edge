@@ -127,6 +127,8 @@ headless-boot + SSH + OpenRC-service workflow. **It does not emulate the
 `asus-x00td` hardware** — Wi-Fi, USB-gadget networking, eMMC and stable boot
 must still be verified on the real phone (Phase 0).
 
+![enjoys-os booting in QEMU: ENJOYS banner + login and live system-info MOTD](docs/enjoys-os-emulator.png)
+
 ## Deploy on the phone (pmOS)
 
 ```sh
