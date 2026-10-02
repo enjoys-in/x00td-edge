@@ -1,6 +1,6 @@
 # Flashing enjoys-os to the phone (Asus ZenFone Max Pro M1 — `asus-x00td`)
 
-This flashes the **real** `enjoys-os` image (SSH + Docker + Caddy, OpenRC,
+This flashes the **real** `enjoys-os` image (minimal headless **SSH**, OpenRC,
 boot splash) onto the phone with `pmbootstrap` + `fastboot`. It is the same
 userland you tested in the QEMU emulator; only the kernel/hardware differ.
 
@@ -40,8 +40,8 @@ cd /mnt/f/private/ENJOYS/x00td-edge
 TARGET=asus-x00td bash os/build-os.sh
 ```
 
-Unlike the emulator build, this **prompts for a real login password** (no dummy
-`enjoys`). Choose a strong one — it's your console + SSH password.
+You log in as **`root`** with password **`enjoys`** (set on first boot; the
+non-root `user` account is locked). Change it after first boot with `passwd`.
 
 ## 3. Unlock the bootloader (one-time, wipes the device)
 
@@ -132,25 +132,22 @@ then a console login — hostname `enjoys-os`.
 With the phone booted and plugged into USB, a USB-network interface appears and
 the phone is reachable at **`172.16.42.1`**:
 ```bash
-ssh user@172.16.42.1        # password = the one you set in step 2
+ssh root@172.16.42.1        # password: enjoys  (change it: passwd)
 ```
-Then verify the stack:
+Then:
 ```bash
-rc-status                   # sshd, docker, caddy started
-docker --version
-caddy version
+rc-status                   # sshd started
 ```
 
 ## 8. Post-flash setup
 
+- **Change the root password:** `passwd`
 - **Wi-Fi / Bluetooth:** see section 9 — the drivers + firmware are already in
-  the port, so joining WiFi is usually just `sudo nmtui`.
-- **Let `user` run docker without sudo** (if it didn't take at build time):
-  ```bash
-  sudo addgroup user docker && sudo rc-service docker restart
-  ```
-- **Timezone:** `sudo setup-timezone`
-- **Update:** `sudo apk update && sudo apk upgrade`
+  the port, so joining WiFi is usually just `nmtui`.
+- **Timezone:** `setup-timezone`
+- **Update:** `apk update && apk upgrade`
+- **Want Docker/Caddy/etc.?** They were removed from the base image in v0.2.0 to
+  keep it ~175 MB — add them back with `apk add docker docker-cli-compose caddy`.
 
 ## 9. Wireless (WiFi / Bluetooth) & firmware
 
@@ -161,7 +158,7 @@ enabled in this port's kernel, and WiFi firmware is shipped:
 |---|---|---|
 | **WiFi** | Qualcomm **WCN3990** via **`ath10k_snoc`** (`CONFIG_ATH10K_SNOC=m`) | driver on; firmware `ath10k/WCN3990/*` shipped by `firmware-asus-x00td` |
 | **Bluetooth** | Qualcomm **`hci_qca`** (`CONFIG_BT_QCA=m`) | driver on; BT firmware blobs may need the stock ones (see extraction) |
-| **Camera** | mainline Qualcomm CAMSS | not supported |
+| **Camera** | mainline Qualcomm CAMSS (front OV8856 + rear OV13855) | device-tree added; needs on-device bring-up (see `docs/camera-port.md`) |
 
 The device also pulls in **`msm-firmware-loader`**, which loads firmware straight
 from the phone's own stock firmware partition at runtime — so in many cases **no

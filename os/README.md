@@ -1,9 +1,9 @@
-# Building the phone OS (postmarketOS / Alpine)
+# Building enjoys-os (postmarketOS / Alpine)
 
-This folder builds the **actual operating system** for the Asus ZenFone Max
-Pro M1 (`asus-x00td`) — a real Alpine Linux (postmarketOS), not a container.
-Your services (Go API + Redis + nginx) are baked into the image as the
-`edge-stack` package so they come up on boot.
+This folder builds **enjoys-os** — a minimal headless Linux (postmarketOS /
+Alpine) for the Asus ZenFone Max Pro M1 (`asus-x00td`): **SSH only**, with a
+boot splash, root login, and a branded MOTD. A close-to-mainline kernel carries
+the phone's front (OV8856) + rear main (OV13855) camera device-tree.
 
 The same build produces two images:
 
@@ -12,67 +12,74 @@ The same build produces two images:
 | `qemu-aarch64` | boot in the **emulator** (QEMU) to test   |
 | `asus-x00td`   | **flash** to the real phone               |
 
-Both share the same Alpine userland + `edge-stack`; only the kernel/drivers
-differ. So the emulator validates the OS + services — only Wi-Fi/boot remain
-phone-only.
+Both share the same Alpine userland + the `enjoys-base` package; only the
+kernel/drivers differ.
+
+## What's in the image
+- `openssh` (sshd) + boot splash (`postmarketos-bootsplash`, enjoys-os theme)
+- **Root login** (password `enjoys`); the non-root `user` account is locked
+- Dynamic **MOTD**: ENJOYS banner + live system info (load, memory, disk, IP…)
+- Rootfs **~175 MB**. Docker + Caddy were removed in **v0.2.0** to keep it small
+  — add them back on-device with `apk add docker docker-cli-compose caddy`.
+
+RAM and storage are **auto-detected** per device; the root filesystem auto-expands
+to fill the phone's partition on first boot.
 
 ## Prerequisites (one-time, inside WSL2 Ubuntu)
 
-`pmbootstrap` needs real Linux and uses `sudo` (you type your password — the
-scripts never handle it). KVM is absent under WSL2, so the emulator runs in
-software emulation (slower, still works).
+`pmbootstrap` needs real Linux and uses `sudo` (you type the password — the
+scripts never handle it). WSL2 has no `/dev/kvm`, so the emulator runs under TCG
+(software emulation — slower, still works).
 
 ```sh
-sudo apt update && sudo apt install -y pipx qemu-system-arm
-pipx install pmbootstrap && pipx ensurepath
+export PATH="$HOME/.local/bin:$PATH"   # where pmbootstrap is installed
 pmbootstrap --version
 ```
 
-## 1. Initialise pmbootstrap for a target (interactive, one-time per device)
+## 1. Initialise pmbootstrap for a target (one-time per device)
 
 ```sh
 pmbootstrap init
 #   channel: edge
-#   device:  qemu-aarch64   (for the emulator)  — repeat later for asus-x00td
+#   device:  qemu-aarch64   (emulator)   — repeat later for asus-x00td
 #   UI:      none           (headless, pure shell + sshd)
 #   extra packages: openssh
 ```
 
-## 2. Build the OS image with the stack baked in
-
-From the project root:
+## 2. Build the image
 
 ```sh
-TARGET=qemu-aarch64 os/build-os.sh      # emulator image
-# TARGET=asus-x00td  os/build-os.sh     # flashable phone image
+TARGET=qemu-aarch64 bash os/build-os.sh   # emulator image
+TARGET=asus-x00td   bash os/build-os.sh   # flashable phone image
 ```
 
-This cross-builds the Go binary, assembles the `edge-stack` package, builds
-it, and bakes it into the rootfs image.
+The script CR-strips the package files, builds the `enjoys-base` apk, and bakes
+it into the rootfs image (non-interactive; root login is `enjoys`).
 
-## 3. Test it in the emulator
+## 3. Test in the emulator
+
+See [../docs/qemu.md](../docs/qemu.md). Log in as **`root`** / **`enjoys`**.
 
 ```sh
-os/run-emulator.sh                      # boots the image in QEMU
-# in another shell:
-ssh -p 2222 <user>@127.0.0.1            # you're now in YOUR phone OS
-rc-status                               # redis / edge-api / nginx running
-curl localhost:8080/db/time
+os/run-emulator.sh          # boots the image in QEMU (pmbootstrap qemu)
 ```
 
-## 4. Flash to the phone (only once the emulator looks right)
+## 4. Flash the phone
+
+See [../flash.md](../flash.md). In short, from WSL with the phone in fastboot:
 
 ```sh
-# after: pmbootstrap init (device: asus-x00td) && TARGET=asus-x00td os/build-os.sh
+pmbootstrap flasher flash_vbmeta
 pmbootstrap flasher flash_kernel
 pmbootstrap flasher flash_rootfs
 ```
+Then `ssh root@172.16.42.1` (password `enjoys`).
 
-## Notes
+## Files in this folder
 
-- `edge-stack` keeps the phone lean per the plan: **Postgres stays remote**.
-  To also run Postgres/Docker *on the device*, add `postgresql` / `docker` to
-  the package `depends` — but that hits the slow eMMC (see the plan's rationale
-  for keeping the DB off the phone).
-- `pmbootstrap` / `sudo` steps can't be auto-run here (password entry), so run
-  these in your WSL terminal; the scripts do everything except type the password.
+| Path | What |
+|---|---|
+| `pmaports/enjoys-base/` | the custom package — `APKBUILD`, `post-install` (root login, MOTD, services), plymouth splash theme |
+| `camera/` | the front+rear camera device-tree + kernel integration (see [../docs/camera-port.md](../docs/camera-port.md)) |
+| `build-os.sh` | build the `enjoys-base` apk + rootfs image for a target |
+| `run-emulator.sh` | boot the emulator image in QEMU |

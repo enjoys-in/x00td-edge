@@ -43,8 +43,9 @@ echo ">> [4/4] building the rootfs image for $TARGET (with $PKG baked in)"
 case "$TARGET" in
 	# Emulator: throwaway password so the build is non-interactive.
 	qemu-*) pmbootstrap install --add "$PKG" --password "${USER_PASSWORD:-enjoys}" --zap ;;
-	# Phone: prompt interactively for a real password.
-	*)      pmbootstrap install --add "$PKG" --zap ;;
+	# Phone: the 'user' account is locked on first boot (root login = enjoys),
+	# so the user password is irrelevant — set it non-interactively too.
+	*)      pmbootstrap install --add "$PKG" --password "${USER_PASSWORD:-enjoys}" --zap ;;
 esac
 
 echo
