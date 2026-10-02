@@ -6,8 +6,8 @@
 
 pkgname=enjoys-base
 pkgver=0.1.0
-pkgrel=0
-pkgdesc="enjoys-os base: headless SSH + Docker + Caddy, with boot splash"
+pkgrel=1
+pkgdesc="enjoys-os base: headless SSH + Docker + Caddy, root login + branded MOTD"
 url="https://local/enjoys-os"
 arch="noarch"
 license="MIT"

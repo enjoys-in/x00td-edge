@@ -1,15 +1,47 @@
 #!/bin/sh
-# Enable SSH + Docker + Caddy on boot.
+# enjoys-os post-install: services, root-as-primary login, branding + MOTD.
+
+# --- enable services on boot ---
 rc-update add sshd   default 2>/dev/null || true
 rc-update add docker default 2>/dev/null || true
 rc-update add caddy  default 2>/dev/null || true
+rc-update add local  default 2>/dev/null || true
 
-# Let the default 'user' use docker without sudo (best effort; the user account
-# may be created after this runs, so re-run on first boot if it didn't take).
-addgroup user docker 2>/dev/null || true
+# --- root is the primary account (password set on first boot, see below) ---
 
-# Make enjoys-os the default Plymouth theme (path owned by plymouth, so write
-# it here instead of shipping it to avoid an apk file conflict).
+# allow root over SSH + password auth (headless admin box)
+if [ -f /etc/ssh/sshd_config ]; then
+	if grep -qiE '^[#[:space:]]*PermitRootLogin' /etc/ssh/sshd_config; then
+		sed -i 's/^[#[:space:]]*PermitRootLogin.*/PermitRootLogin yes/I' /etc/ssh/sshd_config
+	else
+		printf '\nPermitRootLogin yes\n' >> /etc/ssh/sshd_config
+	fi
+	if grep -qiE '^[#[:space:]]*PasswordAuthentication' /etc/ssh/sshd_config; then
+		sed -i 's/^[#[:space:]]*PasswordAuthentication.*/PasswordAuthentication yes/I' /etc/ssh/sshd_config
+	else
+		printf 'PasswordAuthentication yes\n' >> /etc/ssh/sshd_config
+	fi
+fi
+
+# Make root the login (password: enjoys) and lock the non-root 'user'. This MUST
+# run on first boot: pmbootstrap finalizes the accounts AFTER this package's
+# install script (it locks root and sets the 'user' password), so changes made
+# here would be overwritten. The 'local' service runs /etc/local.d/*.start at
+# boot; the shadow edits persist, and the script self-deletes after one run.
+# Locking 'user' also removes the failing per-user OpenRC session (user.user),
+# which errors on this headless image because XDG_RUNTIME_DIR is unset.
+mkdir -p /etc/local.d
+cat > /etc/local.d/enjoys-firstboot.start <<'FB'
+#!/bin/sh
+echo "root:enjoys" | chpasswd 2>/dev/null || true
+passwd -u root 2>/dev/null || true
+passwd -l user 2>/dev/null || true
+rc-service user.user stop 2>/dev/null || true
+rm -f /etc/local.d/enjoys-firstboot.start
+FB
+chmod +x /etc/local.d/enjoys-firstboot.start
+
+# --- plymouth boot splash theme ---
 mkdir -p /etc/plymouth
 cat > /etc/plymouth/plymouthd.conf <<'EOF'
 [Daemon]
@@ -17,7 +49,7 @@ Theme=enjoys-os
 DeviceTimeout=8
 EOF
 
-# Default Caddy site (path owned by caddy; write instead of ship).
+# --- default Caddy site ---
 mkdir -p /etc/caddy
 cat > /etc/caddy/Caddyfile <<'EOF'
 # enjoys-os default Caddy site. Replace with your sites / reverse proxies.
@@ -26,19 +58,56 @@ cat > /etc/caddy/Caddyfile <<'EOF'
 }
 EOF
 
-# Branding: console boot/login banner + motd.
-# \n and \l are agetty escapes (hostname, tty) and must stay literal.
+# --- console pre-login banner (/etc/issue); \n \l are agetty escapes ---
 cat > /etc/issue <<'EOF'
-========================================
-            E N J O Y S - O S
-     X00TD - SSH + Docker + Caddy
-========================================
-\n (\l)
+   ENJOYS-OS  -  Cloud & Edge Node
+   \n (\l)
 
 EOF
 
-cat > /etc/motd <<'EOF'
-Welcome to enjoys-os - headless SSH + Docker + Caddy node.
-EOF
+# no static motd — the dynamic banner below replaces it
+: > /etc/motd
+
+# --- dynamic login banner: ENJOYS art + live system info ---
+cat > /etc/profile.d/00-enjoys-motd.sh <<'MOTD'
+# enjoys-os login banner (ENJOYS art + live system info). Interactive only.
+case $- in *i*) : ;; *) return 0 2>/dev/null || true ;; esac
+[ -t 1 ] || { return 0 2>/dev/null || true; }
+
+_load=$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)
+_up=$(awk '{d=int($1/86400);h=int(($1%86400)/3600);m=int(($1%3600)/60); s=""; if(d>0)s=s d"d "; if(h>0||d>0)s=s h"h "; s=s m"m"; print s}' /proc/uptime 2>/dev/null)
+_mem=$(free -m 2>/dev/null | awk '/^Mem:/{t=$2;u=$3; printf "%d / %d MB (%d%%)", u, t, (t>0)?u*100/t:0}')
+_swap=$(free -m 2>/dev/null | awk '/^Swap:/{if($2>0) printf "%d / %d MB", $3, $2; else printf "0 MB (off)"}')
+_disk=$(df -h / 2>/dev/null | awk 'NR==2{printf "%s / %s (%s used)", $3, $2, $5}')
+_procs=$(ps -e 2>/dev/null | grep -c . )
+_users=$(who 2>/dev/null | wc -l | tr -d ' ')
+_ip=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | tr '\n' ' ')
+[ -z "$_ip" ] && _ip="(no network)"
+
+printf '\033[36m'
+cat <<'BANNER'
+
+ _____ _   _     _  _____   ______
+| ____| \ | |   | |/ _ \ \ / / ___|
+|  _| |  \| |_  | | | | \ V /\___ \
+| |___| |\  | |_| | |_| || |  ___) |
+|_____|_| \_|\___/ \___/ |_| |____/
+BANNER
+printf '\033[0m\n'
+printf '  \033[1mENJOYS-OS\033[0m  -  Cloud & Edge Services\n'
+printf '  System information as of %s\n' "$(date 2>/dev/null)"
+printf '  --------------------------------------------------\n'
+printf '   System load : %s\n' "$_load"
+printf '   Uptime      : %s\n' "$_up"
+printf '   Memory      : %s\n' "$_mem"
+printf '   Swap        : %s\n' "$_swap"
+printf '   Disk (/)    : %s\n' "$_disk"
+printf '   Processes   : %s\n' "$_procs"
+printf '   Users       : %s\n' "$_users"
+printf '   IPv4        : %s\n' "$_ip"
+printf '  --------------------------------------------------\n'
+printf '  Visit \033[4mhttps://enjoys.in\033[0m\n\n'
+MOTD
+chmod +x /etc/profile.d/00-enjoys-motd.sh
 
 exit 0
